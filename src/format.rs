@@ -4,16 +4,6 @@ pub fn code_format(ctx: &Context, is_lst_break_force: &Option<bool>, rule: &Rule
   match rule {
     Rule::AST(ast) => code_format(ctx, is_lst_break_force, ast),
     Rule::Raw(str) => vec![str.to_string()],
-    Rule::Escape(config, str) => {
-      let mut s = String::new();
-      for c in str.chars() {
-        match config.get(&c) {
-          Some(replace) => s.push_str(replace),
-          None => s.push(c),
-        }
-      }
-      vec![s]
-    }
     Rule::Paren(open, rule, close) => {
       let str_lst = code_format(ctx, is_lst_break_force, rule);
       if str_lst.len() <= 1 {

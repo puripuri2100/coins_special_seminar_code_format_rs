@@ -1,14 +1,9 @@
-use std::collections::HashMap;
-
 mod format;
-
-pub type EscapeConfig = HashMap<char, String>;
 
 #[derive(Clone, Debug)]
 pub enum Rule {
   AST(Box<Rule>),
   Raw(String),
-  Escape(EscapeConfig, String),
   List(String, Vec<Rule>),
   Paren(String, Box<Rule>, String),
   Column(Vec<(Rule, ColumnConfig)>),
