@@ -49,6 +49,7 @@ pub struct Context {
   tab_spaces: usize,
   line_width: usize,
   break_str: String,
+  is_lst_break_force : Option<bool>,
 }
 
 impl Context {
@@ -72,6 +73,9 @@ impl Context {
     let indent_len = self.tab_spaces * self.depth;
     self.line_width - indent_len
   }
+  fn set_is_lst_break_force(&self, b: Option<bool>) -> Self {
+    Context { is_lst_break_force: b, .. self.clone() }
+  }
 }
 
 pub fn code_format(rule: &Rule) -> String {
@@ -80,8 +84,9 @@ pub fn code_format(rule: &Rule) -> String {
     tab_spaces: 2,
     line_width: 35,
     break_str: "\n".to_string(),
+    is_lst_break_force : None,
   };
-  format::code_format(&ctx, &None, rule).join("\n")
+  format::code_format(&ctx, rule).join("\n")
 }
 
 pub trait Ast2Rule {

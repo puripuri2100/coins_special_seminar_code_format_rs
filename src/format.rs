@@ -1,17 +1,17 @@
 use crate::{ColumnConfig, Context, Rule};
 
-pub fn code_format(ctx: &Context, is_lst_break_force: &Option<bool>, rule: &Rule) -> Vec<String> {
+pub fn code_format(ctx: &Context, rule: &Rule) -> Vec<String> {
   match rule {
-    Rule::AST(ast) => code_format(ctx, is_lst_break_force, ast),
+    Rule::AST(ast) => code_format(ctx, ast),
     Rule::Raw(str) => vec![str.to_string()],
     Rule::Paren(open, rule, close) => {
-      let str_lst = code_format(ctx, is_lst_break_force, rule);
+      let str_lst = code_format(ctx, rule);
       if str_lst.len() <= 1 {
         vec![format!("{open}{}{close}", str_lst.join(""))]
       } else {
         let mut v = Vec::new();
         v.push(open.to_string());
-        for str in code_format(&ctx.increment_depth(), is_lst_break_force, rule) {
+        for str in code_format(&ctx.increment_depth(), rule) {
           v.push(str.to_string())
         }
         v.push(close.to_string());
@@ -22,18 +22,18 @@ pub fn code_format(ctx: &Context, is_lst_break_force: &Option<bool>, rule: &Rule
       let tab = ctx.indent();
       let mut is_multiline = false;
       for rule in lst.iter() {
-        if code_format(ctx, &None, rule).len() > 1 {
+        if code_format(&ctx.set_is_lst_break_force(None), rule).len() > 1 {
           is_multiline = true;
           break;
         }
       }
-      if let Some(true) = *is_lst_break_force {
+      if let Some(true) = ctx.is_lst_break_force {
         is_multiline = true
       }
       if !is_multiline {
         let str = lst
           .iter()
-          .map(|rule| code_format(ctx, &None, rule).join(""))
+          .map(|rule| code_format(&ctx.set_is_lst_break_force(None),  rule).join(""))
           .collect::<Vec<_>>()
           .join(&format!("{join} "));
         if str.len() < ctx.len_max() {
@@ -44,7 +44,7 @@ pub fn code_format(ctx: &Context, is_lst_break_force: &Option<bool>, rule: &Rule
       let mut v = vec![];
       let mut lst = lst
         .iter()
-        .map(|rule| code_format(&ctx.increment_depth(), &None, rule))
+        .map(|rule| code_format(&ctx.increment_depth().set_is_lst_break_force(None), rule))
         .peekable();
       loop {
         match lst.next() {
