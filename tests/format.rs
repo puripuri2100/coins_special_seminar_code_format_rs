@@ -1,7 +1,5 @@
 extern crate code_format;
 
-use std::default;
-
 use code_format::{code_format, Ast2RuleWithComment, ColumnConfig, Rule, RuleWithComment};
 
 #[derive(Clone, Debug)]
