@@ -1,18 +1,26 @@
+use std::fmt::format;
+
 mod format;
 
 #[derive(Clone, Debug)]
 pub enum Rule {
-  AST(Box<Rule>),
+  AST(Box<RuleWithComment>),
   Raw(String),
-  List(String, Vec<Rule>),
-  Paren(String, Box<Rule>, String),
-  Column(Vec<(Rule, ColumnConfig)>),
+  List(String, Vec<RuleWithComment>),
+  Paren(String, Box<RuleWithComment>, String),
+  Column(Vec<(RuleWithComment, ColumnConfig)>),
+}
+
+#[derive(Clone, Debug)]
+pub struct RuleWithComment {
+  pub before_comments: Vec<String>,
+  pub rule: Rule,
+  pub after_comment: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ColumnConfig {
-  /// Knuth/Plas行分割アルゴリズムで使う
-  pub break_penalty: isize,
+  pub is_break: Option<bool>,
   /// トークン間に入れるスペースの数
   /// `None`であればデフォルトは1つの空白を入れる
   /// 0であれば空白無しで結合する
@@ -22,16 +30,16 @@ pub struct ColumnConfig {
 impl Default for ColumnConfig {
   fn default() -> Self {
     ColumnConfig {
-      break_penalty: 0,
+      is_break: None,
       space_size: None,
     }
   }
 }
 
 impl ColumnConfig {
-  fn set_break_penalty(&self, penalty: isize) -> Self {
+  fn set_is_break(&self, penalty: Option<bool>) -> Self {
     ColumnConfig {
-      break_penalty: penalty,
+      is_break: penalty,
       ..*self
     }
   }
@@ -43,16 +51,18 @@ impl ColumnConfig {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Context {
+#[derive(Clone)]
+pub struct Context<'a> {
   depth: usize,
   tab_spaces: usize,
   line_width: usize,
   break_str: String,
-  is_lst_break_force : Option<bool>,
+  is_lst_break_force: Option<bool>,
+  oneline_comment_format: &'a dyn Fn(String) -> String,
+  block_comment_format: &'a dyn Fn(Context, Vec<String>) -> Vec<String>,
 }
 
-impl Context {
+impl<'a> Context<'a> {
   fn increment_depth(&self) -> Self {
     Context {
       depth: self.depth + 1,
@@ -74,21 +84,40 @@ impl Context {
     self.line_width - indent_len
   }
   fn set_is_lst_break_force(&self, b: Option<bool>) -> Self {
-    Context { is_lst_break_force: b, .. self.clone() }
+    Context {
+      is_lst_break_force: b,
+      ..self.clone()
+    }
   }
 }
 
-pub fn code_format(rule: &Rule) -> String {
+fn oneline_comment_format(s: String) -> String {
+  format!("// {s}")
+}
+fn block_comment_format(_ctx: Context, s: Vec<String>) -> Vec<String> {
+  let mut v = vec![String::from("/*")];
+  for s in s {
+    v.push(s)
+  }
+  v.push(String::from("*/"));
+  v
+}
+
+pub fn code_format(rule_with_comment: &RuleWithComment) -> String {
   let ctx = Context {
     depth: 0,
     tab_spaces: 2,
     line_width: 35,
     break_str: "\n".to_string(),
-    is_lst_break_force : None,
+    is_lst_break_force: None,
+    oneline_comment_format: &oneline_comment_format,
+    block_comment_format: &block_comment_format,
   };
-  format::code_format(&ctx, rule).join("\n")
+  format::code_format(&ctx, &rule_with_comment)
+    .0
+    .join(&ctx.break_str)
 }
 
-pub trait Ast2Rule {
-  fn to_rule(&self) -> Rule;
+pub trait Ast2RuleWithComment {
+  fn to_rule(&self) -> RuleWithComment;
 }

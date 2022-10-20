@@ -1,6 +1,6 @@
 extern crate code_format;
 
-use code_format::{code_format, Ast2Rule, Rule};
+use code_format::{code_format, Ast2RuleWithComment, Rule, RuleWithComment};
 
 #[derive(Clone, Debug)]
 enum Test {
@@ -10,28 +10,40 @@ enum Test {
   C(Vec<Test>),
 }
 
-impl Ast2Rule for Test {
-  fn to_rule(&self) -> Rule {
+fn make_rule_with_comment(rule: Rule) -> RuleWithComment {
+  RuleWithComment {
+    before_comments: vec![],
+    rule: rule,
+    after_comment: None,
+  }
+}
+
+impl Ast2RuleWithComment for Test {
+  fn to_rule(&self) -> RuleWithComment {
     match self {
-      Test::A(int) => Rule::Raw(int.to_string()),
-      Test::B(float) => Rule::Paren(
+      Test::A(int) => make_rule_with_comment(Rule::Raw(int.to_string())),
+      Test::B(float) => make_rule_with_comment(Rule::Paren(
         "(".to_string(),
-        Box::new(Rule::Raw(float.to_string())),
+        Box::new(make_rule_with_comment(Rule::Raw(float.to_string()))),
         ")".to_string(),
-      ),
+      )),
       Test::AorB(t) => {
         let ast = Box::new(t.to_rule());
-        let rule = Rule::AST(ast);
-        Rule::Paren("<".to_string(), Box::new(rule), ">".to_string())
+        let rule = make_rule_with_comment(Rule::AST(ast));
+        make_rule_with_comment(Rule::Paren(
+          "<".to_string(),
+          Box::new(rule),
+          ">".to_string(),
+        ))
       }
-      Test::C(lst) => Rule::Paren(
+      Test::C(lst) => make_rule_with_comment(Rule::Paren(
         "[".to_string(),
-        Box::new(Rule::List(
+        Box::new(make_rule_with_comment(Rule::List(
           ",".to_string(),
           lst.iter().map(|t| t.to_rule()).collect::<Vec<_>>(),
-        )),
+        ))),
         "]".to_string(),
-      ),
+      )),
     }
   }
 }
@@ -47,11 +59,11 @@ fn check1() {
 #[test]
 
 fn check2() {
-  let test = Rule::AST(Box::new(Rule::Paren(
+  let test = make_rule_with_comment(Rule::AST(Box::new(make_rule_with_comment(Rule::Paren(
     "<".to_string(),
-    Box::new(Rule::Raw(42.to_string())),
+    Box::new(make_rule_with_comment(Rule::Raw(42.to_string()))),
     ">".to_string(),
-  )));
+  )))));
   let ok_str = format!("<42>");
   assert_eq!(ok_str, code_format(&test))
 }
