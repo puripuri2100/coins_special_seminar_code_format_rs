@@ -1,6 +1,8 @@
 extern crate code_format;
 
-use code_format::{code_format, Ast2RuleWithComment, Rule, RuleWithComment};
+use std::default;
+
+use code_format::{code_format, Ast2RuleWithComment, ColumnConfig, Rule, RuleWithComment};
 
 #[derive(Clone, Debug)]
 enum Test {
@@ -11,6 +13,7 @@ enum Test {
   AorB(Box<Test>),
   C(Vec<Test>),
   D(Vec<String>, Vec<Test>),
+  Let(Vec<String>, String, Box<Test>),
 }
 
 fn make_rule_with_comment_none(rule: Rule) -> RuleWithComment {
@@ -85,6 +88,37 @@ impl Ast2RuleWithComment for Test {
         ),
         None,
       ),
+      Test::Let(before_comments, name, inner) => {
+        let default_cc = ColumnConfig::default();
+        make_rule_with_comment(
+          before_comments.clone(),
+          Rule::Column(vec![
+            (
+              make_rule_with_comment_none(Rule::Raw("let".to_string())),
+              default_cc.set_is_break(Some(false)),
+            ),
+            (
+              make_rule_with_comment_none(Rule::Raw(name.to_string())),
+              default_cc.set_is_break(Some(false)).set_space_size(2),
+            ),
+            (
+              make_rule_with_comment_none(Rule::Raw("=".to_string())),
+              default_cc.clone(),
+            ),
+            (
+              make_rule_with_comment_none(Rule::Paren(
+                "{".to_string(),
+                Box::new(make_rule_with_comment_none(Rule::AST(Box::new(
+                  inner.to_rule(),
+                )))),
+                "}".to_string(),
+              )),
+              default_cc.set_is_break(None),
+            ),
+          ]),
+          None,
+        )
+      }
     }
   }
 }
@@ -228,87 +262,57 @@ fuga
   assert_eq!(ok_str, code_format(&test.to_rule()))
 }
 
-//#[derive(Clone, Debug)]
-//enum Test2 {
-//  Value(Value2),
-//  Op(String, Value2, Value2),
-//  NonRecLet(String, Value2),
-//  RecLet(String, Value2),
-//  LetMutable(String, Value2),
-//}
-//
-//#[derive(Clone, Debug)]
-//enum Value2 {
-//  Int(isize),
-//  Float(f64),
-//  String(String),
-//}
-//
-//impl Ast2Rule for Test2 {
-//  fn to_rule(&self) -> Rule {
-//    match self {
-//      Test2::Value(v) => Rule::Raw(value2_to_string(v)),
-//      Test2::Op(op, v1, v2) => Rule::List(
-//        "".to_string(),
-//        vec![
-//          Rule::Raw(value2_to_string(v1)),
-//          Rule::Raw(op.to_string()),
-//          Rule::Raw(value2_to_string(v2)),
-//        ],
-//      ),
-//      Test2::NonRecLet(name, v) => Rule::List(
-//        "".to_string(),
-//        vec![
-//          Rule::Raw("let".to_string()),
-//          Rule::NonBreak,
-//          Rule::Raw(name.to_string()),
-//          Rule::NonBreak,
-//          Rule::Raw("=".to_string()),
-//          Rule::Raw(value2_to_string(v)),
-//        ],
-//      ),
-//      Test2::RecLet(name, v) => Rule::List(
-//        "".to_string(),
-//        vec![
-//          Rule::Raw("let".to_string()),
-//          Rule::NonBreak,
-//          Rule::Raw("rec".to_string()),
-//          Rule::NonBreak,
-//          Rule::Raw(name.to_string()),
-//          Rule::NonBreak,
-//          Rule::Raw("=".to_string()),
-//          Rule::Raw(value2_to_string(v)),
-//        ],
-//      ),
-//      Test2::LetMutable(name, v) => Rule::List(
-//        "".to_string(),
-//        vec![
-//          Rule::Raw("let".to_string()),
-//          Rule::NonBreak,
-//          Rule::Raw("mutable".to_string()),
-//          Rule::NonBreak,
-//          Rule::Raw(name.to_string()),
-//          Rule::NonBreak,
-//          Rule::Raw("<-".to_string()),
-//          Rule::Raw(value2_to_string(v)),
-//        ],
-//      ),
-//    }
-//  }
-//}
-//
-//fn value2_to_string(v: &Value2) -> String {
-//  match v {
-//    Value2::Int(n) => n.to_string(),
-//    Value2::Float(f) => f.to_string(),
-//    Value2::String(s) => s.to_string(),
-//  }
-//}
-//
-//#[test]
-//fn check6() {
-//  let test = Test2::NonRecLet("hoge".to_string(), Value2::Int(4));
-//  let ok_str = format!("let hoge = 4");
-//  assert_eq!(ok_str, code_format(&test.to_rule()))
-//}
-//
+#[test]
+fn check8() {
+  let test = Test::D(
+    vec!["hoge".to_string(), "fuga".to_string()],
+    vec![
+      Test::AorB(Box::new(Test::A(42))),
+      Test::C(vec![
+        Test::A(33333333333),
+        Test::B(33333333333.14),
+        Test::B(33333333333.141),
+      ]),
+      Test::AorB(Box::new(Test::A(3333333))),
+      Test::A(3333333),
+      Test::AorB(Box::new(Test::A(3333333))),
+      Test::C(vec![
+        Test::AWithComment(vec!["hoge".to_string()], 333333, Some("fuga".to_string())),
+        Test::Let(
+          vec!["短めのcolumnのテストです".to_string()],
+          "name".to_string(),
+          Box::new(Test::A(3333333)),
+        ),
+        Test::BWithComment(vec!["hoge".to_string()], 333.14, Some("fuga".to_string())),
+        Test::B(33333333333.141),
+      ]),
+    ],
+  );
+  let ok_str = format!(
+    "/*
+hoge
+fuga
+*/
+[
+  <42>,
+  [
+    33333333333,
+    (33333333333.14),
+    (33333333333.141)
+  ],
+  <3333333>,
+  3333333,
+  <3333333>,
+  [
+    // hoge
+    333333, // fuga
+    // 短めのcolumnのテストです
+    let name  = {{3333333}},
+    // hoge
+    (333.14), // fuga
+    (33333333333.141)
+  ]
+]"
+  );
+  assert_eq!(ok_str, code_format(&test.to_rule()))
+}

@@ -26,13 +26,13 @@ pub struct ColumnConfig {
 }
 
 impl ColumnConfig {
-  fn set_is_break(&self, penalty: Option<bool>) -> Self {
+  pub fn set_is_break(&self, penalty: Option<bool>) -> Self {
     ColumnConfig {
       is_break: penalty,
       ..*self
     }
   }
-  fn set_space_size(&self, size: usize) -> Self {
+  pub fn set_space_size(&self, size: usize) -> Self {
     ColumnConfig {
       space_size: Some(size),
       ..*self

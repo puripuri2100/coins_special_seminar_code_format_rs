@@ -222,106 +222,144 @@ fn break_token_column(
   let mut buf2 = String::new();
   let mut buf2_after_spaces = 1;
   let mut lst = lst.iter().peekable();
-  while let Some((rule_with_comment, config)) = lst.next() {
-    let (mut str_lst, is_last_exists_after_comment) =
-      code_format(&ctx.set_list_join_str(None), rule_with_comment);
-    if str_lst.len() > 1 || is_last_exists_after_comment {
-      // 複数行
-      let new_code_str = format!("{buf1}{}{buf2}", " ".repeat(buf1_after_spaces));
-      v.push(new_code_str);
-      v.append(&mut str_lst);
-      buf1 = String::new();
-      buf1_after_spaces = 1;
-      buf2 = String::new();
-      buf2_after_spaces = 1;
-    } else {
-      // 一行
-      let buf1_len = buf1.len();
-      let buf2_len = buf2.len();
-      // 一行であることが保証されている
-      let code_str = str_lst.join("");
-      let code_str_len = code_str.len();
-      if buf1_len + buf1_after_spaces + buf2_len + buf2_after_spaces + code_str_len <= ctx.len_max()
-      {
-        // 行長が制限を超えなかったため、そのまま一行にする
-        match config.is_break {
-          Some(true) => {
-            // そのあとで絶対に改行
-            // 更新する
-            let new_code_str = format!(
-              "{buf1}{}{buf2}{}{code_str}",
-              " ".repeat(buf1_after_spaces),
-              " ".repeat(buf2_after_spaces)
-            );
-            v.push(new_code_str);
-            buf1 = String::new();
-            buf1_after_spaces = 1;
-            buf2 = String::new();
-            buf2_after_spaces = 1;
-          }
-          Some(false) => {
-            // 改行不可ポイント
-            buf2.push_str(&code_str);
-            buf2_after_spaces = config.space_size.unwrap_or(1);
-          }
-          None => {
-            // 改行可能ポイント
-            // 全てbuf1に入れてbuf2を初期化
-            buf1.push_str(&" ".repeat(buf1_after_spaces));
-            buf1.push_str(&buf2);
-            buf1.push_str(&" ".repeat(buf2_after_spaces));
-            buf1.push_str(&code_str);
-            buf1_after_spaces = config.space_size.unwrap_or(1);
-            buf2 = String::new();
-            buf2_after_spaces = 1;
-          }
+  loop {
+    if let Some((rule_with_comment, config)) = lst.next() {
+      let (mut str_lst, is_last_exists_after_comment) =
+        code_format(&ctx.set_list_join_str(None), rule_with_comment);
+      if str_lst.len() > 1 || is_last_exists_after_comment {
+        // 複数行
+        if !buf1.is_empty() {
+          let new_code_str = format!("{buf1}{}{buf2}", " ".repeat(buf1_after_spaces));
+          v.push(new_code_str);
         }
+        v.append(&mut str_lst);
+        buf1 = String::new();
+        buf1_after_spaces = 1;
+        buf2 = String::new();
+        buf2_after_spaces = 1;
       } else {
-        // 複数に改行しなければならない
-        if buf2_len == 0 {
-          // 直前が改行可能ポイントである
-          let new_line_code_str = format!("{buf1}{}{buf2}", " ".repeat(buf1_after_spaces));
-          v.push(new_line_code_str);
-          buf1 = code_str;
-          buf1_after_spaces = config.space_size.unwrap_or(1);
-          buf2 = String::new();
-          buf2_after_spaces = 1;
-        } else {
-          // 直前が改行不可ポイントである
-          if buf2_len + buf2_after_spaces + code_str_len <= ctx.len_max() {
-            // buf2とcode_strをくっつけてよい
-            v.push(buf1);
-            let new_line_code_str = format!("{buf2}{}{code_str}", " ".repeat(buf2_after_spaces));
-            v.push(new_line_code_str);
-            buf1 = String::new();
-            buf1_after_spaces = 1;
-            buf2 = String::new();
-            buf2_after_spaces = 1;
-          } else {
-            // buf2とcode_strをくっつけると行数オーバーする
-            // はみ出す量がより少ない方を取る
-            if buf1_len + buf1_after_spaces + buf2_len > buf2_len + buf2_after_spaces + code_str_len
-            {
-              // buf1とbuf2をくっつけた方がはみ出しが少ない
-              let new_line_code_str = format!("{buf1}{}{buf2}", " ".repeat(buf1_after_spaces));
-              v.push(new_line_code_str);
-              buf1 = code_str;
+        // 一行
+        let buf1_len = buf1.len();
+        let buf2_len = buf2.len();
+        // 一行であることが保証されている
+        let code_str = str_lst.join("");
+        let code_str_len = code_str.len();
+        if buf1_len + buf1_after_spaces + buf2_len + buf2_after_spaces + code_str_len
+          <= ctx.len_max()
+        {
+          // 行長が制限を超えなかったため、そのまま一行にする
+          match config.is_break {
+            Some(true) => {
+              // そのあとで絶対に改行
+              // 更新する
+              let new_code_str = if buf1.is_empty() {
+                code_str
+              } else {
+                format!(
+                  "{buf1}{}{buf2}{}{code_str}",
+                  " ".repeat(buf1_after_spaces),
+                  " ".repeat(buf2_after_spaces)
+                )
+              };
+              v.push(new_code_str);
+              buf1 = String::new();
+              buf1_after_spaces = 1;
+              buf2 = String::new();
+              buf2_after_spaces = 1;
+            }
+            Some(false) => {
+              // 改行不可ポイント
+              if buf1.is_empty() {
+                buf1 = code_str;
+                buf1_after_spaces = config.space_size.unwrap_or(1);
+              } else {
+                buf2.push_str(&code_str);
+                buf2_after_spaces = config.space_size.unwrap_or(1);
+              }
+            }
+            None => {
+              // 改行可能ポイント
+              // 全てbuf1に入れてbuf2を初期化
+              if !buf1.is_empty() {
+                buf1.push_str(&" ".repeat(buf1_after_spaces));
+              }
+              buf1.push_str(&buf2);
+              if !buf2.is_empty() {
+                buf1.push_str(&" ".repeat(buf2_after_spaces));
+              }
+              buf1.push_str(&code_str);
               buf1_after_spaces = config.space_size.unwrap_or(1);
               buf2 = String::new();
               buf2_after_spaces = 1;
+            }
+          }
+        } else {
+          // 複数に改行しなければならない
+          if buf2_len == 0 {
+            // 直前が改行可能ポイントである
+            let new_line_code_str = if buf1.is_empty() {
+              buf2
             } else {
-              // buf2とcode_strをくっつけた方がはみ出しが少ない
-              v.push(buf1);
+              format!("{buf1}{}{buf2}", " ".repeat(buf1_after_spaces))
+            };
+            v.push(new_line_code_str);
+            buf1 = code_str;
+            buf1_after_spaces = config.space_size.unwrap_or(1);
+            buf2 = String::new();
+            buf2_after_spaces = 1;
+          } else {
+            // 直前が改行不可ポイントである
+            if buf2_len + buf2_after_spaces + code_str_len <= ctx.len_max() {
+              // buf2とcode_strをくっつけてよい
+              if !buf1.is_empty() {
+                v.push(buf1);
+              }
               let new_line_code_str = format!("{buf2}{}{code_str}", " ".repeat(buf2_after_spaces));
               v.push(new_line_code_str);
               buf1 = String::new();
               buf1_after_spaces = 1;
               buf2 = String::new();
               buf2_after_spaces = 1;
+            } else {
+              // buf2とcode_strをくっつけると行数オーバーする
+              // はみ出す量がより少ない方を取る
+              if buf1_len + buf1_after_spaces + buf2_len
+                > buf2_len + buf2_after_spaces + code_str_len
+              {
+                // buf1とbuf2をくっつけた方がはみ出しが少ない
+                if !buf1.is_empty() {
+                  let new_line_code_str = format!("{buf1}{}{buf2}", " ".repeat(buf1_after_spaces));
+                  v.push(new_line_code_str);
+                }
+                buf1 = code_str;
+                buf1_after_spaces = config.space_size.unwrap_or(1);
+                buf2 = String::new();
+                buf2_after_spaces = 1;
+              } else {
+                // buf2とcode_strをくっつけた方がはみ出しが少ない
+                if !buf1.is_empty() {
+                  v.push(buf1);
+                }
+                let new_line_code_str =
+                  format!("{buf2}{}{code_str}", " ".repeat(buf2_after_spaces));
+                v.push(new_line_code_str);
+                buf1 = String::new();
+                buf1_after_spaces = 1;
+                buf2 = String::new();
+                buf2_after_spaces = 1;
+              }
             }
           }
         }
       }
+    } else {
+      if buf2.is_empty() {
+        v.push(buf1)
+      } else {
+        let new_line_code_str = format!("{buf1}{}{buf2}", " ".repeat(buf1_after_spaces));
+        v.push(new_line_code_str)
+      }
+      break;
     }
   }
   if let Some(after_comment) = after_comment_opt {
