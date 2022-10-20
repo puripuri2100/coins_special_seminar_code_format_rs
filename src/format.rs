@@ -131,8 +131,8 @@ fn break_token_list(
       break;
     }
   }
-  let mut is_oneline_last_comment_exsits = false;
   if !is_multiline {
+    let mut is_oneline_last_comment_exsits = false;
     let str = lst
       .iter()
       .enumerate()
