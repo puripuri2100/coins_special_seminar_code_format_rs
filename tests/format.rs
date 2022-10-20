@@ -6,11 +6,14 @@ use code_format::{code_format, Ast2RuleWithComment, Rule, RuleWithComment};
 enum Test {
   A(isize),
   B(f64),
+  AWithComment(Vec<String>, isize, Option<String>),
+  BWithComment(Vec<String>, f64, Option<String>),
   AorB(Box<Test>),
   C(Vec<Test>),
+  D(Vec<String>, Vec<Test>),
 }
 
-fn make_rule_with_comment(rule: Rule) -> RuleWithComment {
+fn make_rule_with_comment_none(rule: Rule) -> RuleWithComment {
   RuleWithComment {
     before_comments: vec![],
     rule: rule,
@@ -18,32 +21,70 @@ fn make_rule_with_comment(rule: Rule) -> RuleWithComment {
   }
 }
 
+fn make_rule_with_comment(
+  before_comments: Vec<String>,
+  rule: Rule,
+  after_comment: Option<String>,
+) -> RuleWithComment {
+  RuleWithComment {
+    before_comments,
+    rule: rule,
+    after_comment,
+  }
+}
+
 impl Ast2RuleWithComment for Test {
   fn to_rule(&self) -> RuleWithComment {
     match self {
-      Test::A(int) => make_rule_with_comment(Rule::Raw(int.to_string())),
-      Test::B(float) => make_rule_with_comment(Rule::Paren(
+      Test::A(int) => make_rule_with_comment_none(Rule::Raw(int.to_string())),
+      Test::B(float) => make_rule_with_comment_none(Rule::Paren(
         "(".to_string(),
-        Box::new(make_rule_with_comment(Rule::Raw(float.to_string()))),
+        Box::new(make_rule_with_comment_none(Rule::Raw(float.to_string()))),
         ")".to_string(),
       )),
+      Test::AWithComment(before_comments, int, after_comment) => make_rule_with_comment(
+        before_comments.clone(),
+        Rule::Raw(int.to_string()),
+        after_comment.clone(),
+      ),
+      Test::BWithComment(before_comments, float, after_comment) => make_rule_with_comment(
+        before_comments.clone(),
+        Rule::Paren(
+          "(".to_string(),
+          Box::new(make_rule_with_comment_none(Rule::Raw(float.to_string()))),
+          ")".to_string(),
+        ),
+        after_comment.clone(),
+      ),
       Test::AorB(t) => {
         let ast = Box::new(t.to_rule());
-        let rule = make_rule_with_comment(Rule::AST(ast));
-        make_rule_with_comment(Rule::Paren(
+        let rule = make_rule_with_comment_none(Rule::AST(ast));
+        make_rule_with_comment_none(Rule::Paren(
           "<".to_string(),
           Box::new(rule),
           ">".to_string(),
         ))
       }
-      Test::C(lst) => make_rule_with_comment(Rule::Paren(
+      Test::C(lst) => make_rule_with_comment_none(Rule::Paren(
         "[".to_string(),
-        Box::new(make_rule_with_comment(Rule::List(
+        Box::new(make_rule_with_comment_none(Rule::List(
           ",".to_string(),
           lst.iter().map(|t| t.to_rule()).collect::<Vec<_>>(),
         ))),
         "]".to_string(),
       )),
+      Test::D(before_comments, lst) => make_rule_with_comment(
+        before_comments.clone(),
+        Rule::Paren(
+          "[".to_string(),
+          Box::new(make_rule_with_comment_none(Rule::List(
+            ",".to_string(),
+            lst.iter().map(|t| t.to_rule()).collect::<Vec<_>>(),
+          ))),
+          "]".to_string(),
+        ),
+        None,
+      ),
     }
   }
 }
@@ -59,11 +100,13 @@ fn check1() {
 #[test]
 
 fn check2() {
-  let test = make_rule_with_comment(Rule::AST(Box::new(make_rule_with_comment(Rule::Paren(
-    "<".to_string(),
-    Box::new(make_rule_with_comment(Rule::Raw(42.to_string()))),
-    ">".to_string(),
-  )))));
+  let test = make_rule_with_comment_none(Rule::AST(Box::new(make_rule_with_comment_none(
+    Rule::Paren(
+      "<".to_string(),
+      Box::new(make_rule_with_comment_none(Rule::Raw(42.to_string()))),
+      ">".to_string(),
+    ),
+  ))));
   let ok_str = format!("<42>");
   assert_eq!(ok_str, code_format(&test))
 }
@@ -132,6 +175,54 @@ fn check6() {
   <3333333>,
   3333333,
   <3333333>
+]"
+  );
+  assert_eq!(ok_str, code_format(&test.to_rule()))
+}
+
+#[test]
+fn check7() {
+  let test = Test::D(
+    vec!["hoge".to_string(), "fuga".to_string()],
+    vec![
+      Test::AorB(Box::new(Test::A(42))),
+      Test::C(vec![
+        Test::A(33333333333),
+        Test::B(33333333333.14),
+        Test::B(33333333333.141),
+      ]),
+      Test::AorB(Box::new(Test::A(3333333))),
+      Test::A(3333333),
+      Test::AorB(Box::new(Test::A(3333333))),
+      Test::C(vec![
+        Test::AWithComment(vec!["hoge".to_string()], 333333, Some("fuga".to_string())),
+        Test::BWithComment(vec!["hoge".to_string()], 333.14, Some("fuga".to_string())),
+        Test::B(33333333333.141),
+      ]),
+    ],
+  );
+  let ok_str = format!(
+    "/*
+hoge
+fuga
+*/
+[
+  <42>,
+  [
+    33333333333,
+    (33333333333.14),
+    (33333333333.141)
+  ],
+  <3333333>,
+  3333333,
+  <3333333>,
+  [
+    // hoge
+    333333, // fuga
+    // hoge
+    (333.14), // fuga
+    (33333333333.141)
+  ]
 ]"
   );
   assert_eq!(ok_str, code_format(&test.to_rule()))

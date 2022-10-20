@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 mod format;
 
 #[derive(Clone, Debug)]
@@ -18,22 +16,13 @@ pub struct RuleWithComment {
   pub after_comment: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ColumnConfig {
   pub is_break: Option<bool>,
   /// トークン間に入れるスペースの数
   /// `None`であればデフォルトは1つの空白を入れる
   /// 0であれば空白無しで結合する
   pub space_size: Option<usize>,
-}
-
-impl Default for ColumnConfig {
-  fn default() -> Self {
-    ColumnConfig {
-      is_break: None,
-      space_size: None,
-    }
-  }
 }
 
 impl ColumnConfig {
@@ -57,7 +46,7 @@ pub struct Context<'a> {
   tab_spaces: usize,
   line_width: usize,
   break_str: String,
-  is_lst_break_force: Option<bool>,
+  list_join_str: Option<String>,
   oneline_comment_format: &'a dyn Fn(String) -> String,
   block_comment_format: &'a dyn Fn(Context, Vec<String>) -> Vec<String>,
 }
@@ -69,13 +58,6 @@ impl<'a> Context<'a> {
       ..self.clone()
     }
   }
-  fn decrement_depth(&self) -> Self {
-    let d = if self.depth == 0 { 0 } else { self.depth - 1 };
-    Context {
-      depth: d,
-      ..self.clone()
-    }
-  }
   fn indent(&self) -> String {
     " ".repeat(self.tab_spaces)
   }
@@ -83,9 +65,9 @@ impl<'a> Context<'a> {
     let indent_len = self.tab_spaces * self.depth;
     self.line_width - indent_len
   }
-  fn set_is_lst_break_force(&self, b: Option<bool>) -> Self {
+  fn set_list_join_str(&self, j_opt: Option<String>) -> Self {
     Context {
-      is_lst_break_force: b,
+      list_join_str: j_opt,
       ..self.clone()
     }
   }
@@ -109,11 +91,11 @@ pub fn code_format(rule_with_comment: &RuleWithComment) -> String {
     tab_spaces: 2,
     line_width: 35,
     break_str: "\n".to_string(),
-    is_lst_break_force: None,
+    list_join_str: None,
     oneline_comment_format: &oneline_comment_format,
     block_comment_format: &block_comment_format,
   };
-  format::code_format(&ctx, &rule_with_comment)
+  format::code_format(&ctx, rule_with_comment)
     .0
     .join(&ctx.break_str)
 }
