@@ -1,3 +1,4 @@
+mod dynamic;
 mod format;
 
 #[derive(Clone, Debug)]
