@@ -1,4 +1,4 @@
-mod dynamic;
+pub mod dynamic;
 mod format;
 
 #[derive(Clone, Debug)]
@@ -17,7 +17,7 @@ pub struct RuleWithComment {
   pub after_comment: Option<String>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ColumnConfig {
   pub is_break: Option<bool>,
   /// トークン間に入れるスペースの数

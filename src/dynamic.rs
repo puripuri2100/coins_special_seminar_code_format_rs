@@ -4,12 +4,10 @@ use std::{collections::HashMap, hash::Hash};
 
 pub type Tag = String;
 
-pub type IsConfirmed = bool;
-
 pub type BeforeComments = Vec<String>;
 pub type AfterComment = Option<String>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ListedRule {
   Unconfirmed(Tag),
   Link(String),
@@ -18,8 +16,8 @@ pub enum ListedRule {
   Close(CloseRule),
 }
 
-#[derive(Debug, Clone)]
-enum OpenRule {
+#[derive(Debug, Clone, PartialEq)]
+pub enum OpenRule {
   Paren(Option<Tag>, String, BeforeComments),
   List(Option<Tag>, String),
   Column(Option<Tag>),
@@ -27,8 +25,8 @@ enum OpenRule {
   Contents(BeforeComments),
 }
 
-#[derive(Debug, Clone)]
-enum CloseRule {
+#[derive(Debug, Clone, PartialEq)]
+pub enum CloseRule {
   Paren(String, AfterComment),
   List,
   Column,
@@ -36,7 +34,7 @@ enum CloseRule {
   Contents(AfterComment),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Rule {
   Unconfirmed(Tag),
   AST(Box<RuleWithComment>),
@@ -47,22 +45,18 @@ pub enum Rule {
   // Tagがない→コンテンツはアップデートされない確定したものが存在しなければならない
   //
   // Tagがあって且つコンテンツが存在する場合はtag_dataにデータ入れないておかないといけない
-  /// Tag無しコンテンツ無しは実行時エラーで良いのでは
+  // Tag無しコンテンツ無しは実行時エラーで良いのでは
   //-------!!!!!!!!!!!!!!!!!!!!!!!!!!
   List(Option<Tag>, String, Vec<RuleWithComment>),
   Paren(Option<Tag>, String, Box<RuleWithComment>, String),
   Column(Option<Tag>, Vec<(RuleWithComment, ColumnConfig)>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RuleWithComment {
   pub before_comments: Vec<String>,
   pub rule: Rule,
   pub after_comment: Option<String>,
-}
-
-fn is_not_with_comment(r: &RuleWithComment) -> bool {
-  r.before_comments.is_empty() && r.after_comment.is_none()
 }
 
 fn with_comment(r: &Rule) -> RuleWithComment {
@@ -73,17 +67,17 @@ fn with_comment(r: &Rule) -> RuleWithComment {
   }
 }
 
-type FormattedRuleStack = Vec<OpenRule>;
+pub type FormattedRuleStack = Vec<OpenRule>;
 
-#[derive(Clone, Debug)]
-struct InternalRule {
-  rules: Vec<ListedRule>,
+#[derive(Clone, Debug, PartialEq)]
+pub struct InternalRule {
+  pub rules: Vec<ListedRule>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Data {
-  tag_data: HashMap<Tag, InternalRule>,
-  stack: FormattedRuleStack,
+  pub tag_data: HashMap<Tag, InternalRule>,
+  pub stack: FormattedRuleStack,
 }
 
 fn merge_hash_map<K, V>(base: &mut HashMap<K, V>, add: &HashMap<K, V>) -> HashMap<K, V>
@@ -97,7 +91,7 @@ where
   base.clone()
 }
 
-fn rule_to_listedrule(rule: &Rule) -> (Vec<ListedRule>, HashMap<String, InternalRule>) {
+pub fn rule_to_listedrule(rule: &Rule) -> (Vec<ListedRule>, HashMap<String, InternalRule>) {
   let mut lst = vec![];
   let mut base_hashmap = HashMap::new();
   match rule {
@@ -105,15 +99,21 @@ fn rule_to_listedrule(rule: &Rule) -> (Vec<ListedRule>, HashMap<String, Internal
       lst.push(ListedRule::Unconfirmed(tag.clone()));
     }
     Rule::AST(rule_with_comment) => {
-      lst.push(ListedRule::Open(OpenRule::Contents(
-        rule_with_comment.clone().before_comments,
-      )));
-      let (mut rule_lst, new_tag_data) = rule_to_listedrule(&rule_with_comment.rule);
-      merge_hash_map(&mut base_hashmap, &new_tag_data);
-      lst.append(&mut rule_lst);
-      lst.push(ListedRule::Close(CloseRule::Contents(
-        rule_with_comment.clone().after_comment,
-      )));
+      if rule_with_comment.before_comments.is_empty() && rule_with_comment.after_comment.is_none() {
+        let (mut rule_lst, new_tag_data) = rule_to_listedrule(&rule_with_comment.rule);
+        merge_hash_map(&mut base_hashmap, &new_tag_data);
+        lst.append(&mut rule_lst);
+      } else {
+        lst.push(ListedRule::Open(OpenRule::Contents(
+          rule_with_comment.clone().before_comments,
+        )));
+        let (mut rule_lst, new_tag_data) = rule_to_listedrule(&rule_with_comment.rule);
+        merge_hash_map(&mut base_hashmap, &new_tag_data);
+        lst.append(&mut rule_lst);
+        lst.push(ListedRule::Close(CloseRule::Contents(
+          rule_with_comment.clone().after_comment,
+        )));
+      }
     }
     Rule::Raw(s) => lst.push(ListedRule::Raw(s.to_string())),
     Rule::List(tag_opt, join, contents) => {
@@ -121,28 +121,23 @@ fn rule_to_listedrule(rule: &Rule) -> (Vec<ListedRule>, HashMap<String, Internal
         tag_opt.clone(),
         join.to_string(),
       )));
-      let mut listed_rules = vec![];
+      let mut tmp = vec![];
       for content in contents.iter() {
-        let (mut rule_lst, new_tag_data) = rule_to_listedrule(&content.rule);
-        merge_hash_map(&mut base_hashmap, &new_tag_data);
-        listed_rules.push(ListedRule::Open(OpenRule::Contents(
+        tmp.push(ListedRule::Open(OpenRule::Contents(
           content.clone().before_comments,
         )));
-        listed_rules.append(&mut rule_lst);
-        listed_rules.push(ListedRule::Close(CloseRule::Contents(
+        let (mut rule_lst, new_tag_data) = rule_to_listedrule(&content.rule);
+        tmp.append(&mut rule_lst);
+        tmp.push(ListedRule::Close(CloseRule::Contents(
           content.clone().after_comment,
         )));
+        merge_hash_map(&mut base_hashmap, &new_tag_data);
       }
       match tag_opt {
         Some(tag) => {
-          base_hashmap.insert(
-            tag.to_string(),
-            InternalRule {
-              rules: listed_rules,
-            },
-          );
+          base_hashmap.insert(tag.to_string(), InternalRule { rules: tmp });
         }
-        None => lst.append(&mut listed_rules),
+        None => lst.append(&mut tmp),
       }
       lst.push(ListedRule::Close(CloseRule::List));
     }
@@ -172,27 +167,24 @@ fn rule_to_listedrule(rule: &Rule) -> (Vec<ListedRule>, HashMap<String, Internal
     }
     Rule::Column(tag_opt, contents) => {
       lst.push(ListedRule::Open(OpenRule::Column(tag_opt.clone())));
+      let mut tmp = vec![];
       for (rule_with_comment, config) in contents.iter() {
-        lst.push(ListedRule::Open(OpenRule::ColumnContents(
+        tmp.push(ListedRule::Open(OpenRule::ColumnContents(
           config.clone(),
           rule_with_comment.clone().before_comments,
         )));
         let (mut rule_lst, add_data) = rule_to_listedrule(&rule_with_comment.rule);
-        merge_hash_map(&mut base_hashmap, &add_data);
-        match tag_opt {
-          Some(tag) => {
-            base_hashmap.insert(
-              tag.to_string(),
-              InternalRule {
-                rules: rule_lst.to_vec(),
-              },
-            );
-          }
-          None => lst.append(&mut rule_lst),
-        }
-        lst.push(ListedRule::Close(CloseRule::ColumnContents(
+        tmp.append(&mut rule_lst);
+        tmp.push(ListedRule::Close(CloseRule::ColumnContents(
           rule_with_comment.clone().after_comment,
         )));
+        merge_hash_map(&mut base_hashmap, &add_data);
+      }
+      match tag_opt {
+        Some(tag) => {
+          base_hashmap.insert(tag.to_string(), InternalRule { rules: tmp });
+        }
+        None => lst.append(&mut tmp),
       }
       lst.push(ListedRule::Close(CloseRule::Column));
     }
@@ -201,7 +193,7 @@ fn rule_to_listedrule(rule: &Rule) -> (Vec<ListedRule>, HashMap<String, Internal
 }
 
 /// リンクしている場所などをすべて一つのリストにつぶす
-fn flat_listedrule(
+pub fn flat_listedrule(
   listed_rules: &[ListedRule],
   tag_data: &HashMap<Tag, InternalRule>,
 ) -> Vec<ListedRule> {
@@ -251,7 +243,7 @@ fn flat_listedrule(
 
 /// hashmapを使って分散しているルールを一つのリストにつぶされたことを前提に木構造化する
 /// 元のリストをかなり信頼してよく、チェックもあまり行わず、パニックしてよい
-fn listedrule_to_rule(
+pub fn listedrule_to_rule(
   listed_rules: &[ListedRule],
   count: usize,
 ) -> (RuleWithComment, Option<ColumnConfig>, usize) {
@@ -302,12 +294,16 @@ fn listedrule_to_rule(
       let (rule_with_comment, _, count) = listedrule_to_rule(listed_rules, count + 1);
       match listed_rules.get(count) {
         Some(ListedRule::Close(CloseRule::Contents(after_comment))) => {
-          let rule_with_comment = RuleWithComment {
-            before_comments: before_comments.clone(),
-            rule: rule_with_comment.rule,
-            after_comment: after_comment.clone(),
+          let rule = if before_comments.is_empty() && after_comment.is_none() {
+            rule_with_comment.rule
+          } else {
+            let rule_with_comment = RuleWithComment {
+              before_comments: before_comments.clone(),
+              rule: rule_with_comment.rule,
+              after_comment: after_comment.clone(),
+            };
+            Rule::AST(Box::new(rule_with_comment))
           };
-          let rule = Rule::AST(Box::new(rule_with_comment));
           (with_comment(&rule), None, count + 1)
         }
         _ => unreachable!(),
@@ -420,7 +416,7 @@ impl Data {
   /// 2. 今作業しているデータのタグの名前
   /// 3. 値を確定させたい対象のタグの名前
   /// となっている
-  fn confirmed_with_tag(&mut self, tag: &str, target_tag_name: &str) -> bool {
+  pub fn confirmed_with_tag(&mut self, tag: &str, target_tag_name: &str) -> bool {
     let mut new_rules = vec![];
     let mut is_confirmed = false;
     let internal_rules = self.tag_data.get(tag).unwrap().clone().rules;
