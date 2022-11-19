@@ -1,6 +1,33 @@
 extern crate code_format;
 
-use code_format::{code_format, Ast2RuleWithComment, ColumnConfig, Rule, RuleWithComment};
+use code_format::{
+  tree::{code_format, Ast2RuleWithComment, Rule, RuleWithComment},
+  ColumnConfig, Context,
+};
+
+fn oneline_comment_format(s: String) -> String {
+  format!("// {s}")
+}
+fn block_comment_format(_ctx: Context, s: Vec<String>) -> Vec<String> {
+  let mut v = vec![String::from("/*")];
+  for s in s {
+    v.push(s)
+  }
+  v.push(String::from("*/"));
+  v
+}
+
+fn make_ctx<'a>() -> Context<'a> {
+  Context {
+    depth: 0,
+    tab_spaces: 2,
+    line_width: 35,
+    break_str: String::from("\n"),
+    list_join_str: None,
+    oneline_comment_format: &oneline_comment_format,
+    block_comment_format: &block_comment_format,
+  }
+}
 
 #[derive(Clone, Debug)]
 enum Test {
@@ -126,7 +153,7 @@ impl Ast2RuleWithComment for Test {
 fn check1() {
   let test = Test::B(3.14);
   let ok_str = format!("(3.14)");
-  assert_eq!(ok_str, code_format(&test.to_rule()))
+  assert_eq!(ok_str, code_format(&make_ctx(), &test.to_rule()))
 }
 
 #[test]
@@ -140,7 +167,7 @@ fn check2() {
     ),
   ))));
   let ok_str = format!("<42>");
-  assert_eq!(ok_str, code_format(&test))
+  assert_eq!(ok_str, code_format(&make_ctx(), &test))
 }
 
 #[test]
@@ -148,7 +175,7 @@ fn check2() {
 fn check3() {
   let test = Test::AorB(Box::new(Test::A(42)));
   let ok_str = format!("<42>");
-  assert_eq!(ok_str, code_format(&test.to_rule()))
+  assert_eq!(ok_str, code_format(&make_ctx(), &test.to_rule()))
 }
 
 #[test]
@@ -159,7 +186,7 @@ fn check4() {
     Test::C(vec![Test::A(42), Test::B(3.14)]),
   ]);
   let ok_str = format!("[<42>, [42, (3.14)]]");
-  assert_eq!(ok_str, code_format(&test.to_rule()))
+  assert_eq!(ok_str, code_format(&make_ctx(), &test.to_rule()))
 }
 
 #[test]
@@ -180,7 +207,7 @@ fn check5() {
   <3333333>
 ]"
   );
-  assert_eq!(ok_str, code_format(&test.to_rule()))
+  assert_eq!(ok_str, code_format(&make_ctx(), &test.to_rule()))
 }
 
 #[test]
@@ -209,7 +236,7 @@ fn check6() {
   <3333333>
 ]"
   );
-  assert_eq!(ok_str, code_format(&test.to_rule()))
+  assert_eq!(ok_str, code_format(&make_ctx(), &test.to_rule()))
 }
 
 #[test]
@@ -257,7 +284,7 @@ fuga
   ]
 ]"
   );
-  assert_eq!(ok_str, code_format(&test.to_rule()))
+  assert_eq!(ok_str, code_format(&make_ctx(), &test.to_rule()))
 }
 
 #[test]
@@ -312,5 +339,5 @@ fuga
   ]
 ]"
   );
-  assert_eq!(ok_str, code_format(&test.to_rule()))
+  assert_eq!(ok_str, code_format(&make_ctx(), &test.to_rule()))
 }

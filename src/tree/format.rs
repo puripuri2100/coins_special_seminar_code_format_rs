@@ -1,4 +1,7 @@
-use crate::{ColumnConfig, Context, Rule, RuleWithComment};
+use crate::{
+  tree::{Rule, RuleWithComment},
+  ColumnConfig, Context,
+};
 
 #[allow(unreachable_patterns)]
 pub fn code_format(ctx: &Context, rule_with_comment: &RuleWithComment) -> (Vec<String>, bool) {

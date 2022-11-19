@@ -1,21 +1,5 @@
 pub mod dynamic;
-mod format;
-
-#[derive(Clone, Debug)]
-pub enum Rule {
-  AST(Box<RuleWithComment>),
-  Raw(String),
-  List(String, Vec<RuleWithComment>),
-  Paren(String, Box<RuleWithComment>, String),
-  Column(Vec<(RuleWithComment, ColumnConfig)>),
-}
-
-#[derive(Clone, Debug)]
-pub struct RuleWithComment {
-  pub before_comments: Vec<String>,
-  pub rule: Rule,
-  pub after_comment: Option<String>,
-}
+pub mod tree;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ColumnConfig {
@@ -43,13 +27,13 @@ impl ColumnConfig {
 
 #[derive(Clone)]
 pub struct Context<'a> {
-  depth: usize,
-  tab_spaces: usize,
-  line_width: usize,
-  break_str: String,
-  list_join_str: Option<String>,
-  oneline_comment_format: &'a dyn Fn(String) -> String,
-  block_comment_format: &'a dyn Fn(Context, Vec<String>) -> Vec<String>,
+  pub depth: usize,
+  pub tab_spaces: usize,
+  pub line_width: usize,
+  pub break_str: String,
+  pub list_join_str: Option<String>,
+  pub oneline_comment_format: &'a dyn Fn(String) -> String,
+  pub block_comment_format: &'a dyn Fn(Context, Vec<String>) -> Vec<String>,
 }
 
 impl<'a> Context<'a> {
@@ -72,35 +56,4 @@ impl<'a> Context<'a> {
       ..self.clone()
     }
   }
-}
-
-fn oneline_comment_format(s: String) -> String {
-  format!("// {s}")
-}
-fn block_comment_format(_ctx: Context, s: Vec<String>) -> Vec<String> {
-  let mut v = vec![String::from("/*")];
-  for s in s {
-    v.push(s)
-  }
-  v.push(String::from("*/"));
-  v
-}
-
-pub fn code_format(rule_with_comment: &RuleWithComment) -> String {
-  let ctx = Context {
-    depth: 0,
-    tab_spaces: 2,
-    line_width: 35,
-    break_str: "\n".to_string(),
-    list_join_str: None,
-    oneline_comment_format: &oneline_comment_format,
-    block_comment_format: &block_comment_format,
-  };
-  format::code_format(&ctx, rule_with_comment)
-    .0
-    .join(&ctx.break_str)
-}
-
-pub trait Ast2RuleWithComment {
-  fn to_rule(&self) -> RuleWithComment;
 }
