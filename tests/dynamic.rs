@@ -296,7 +296,7 @@ fn check_rule_to_listedrule_2() {
 #[test]
 fn check_listedrule_to_rule_1() {
   let rule = Rule::Column(
-    Some("column1".to_string()),
+    None,
     vec![
       (
         RuleWithComment {
@@ -310,12 +310,12 @@ fn check_listedrule_to_rule_1() {
         RuleWithComment {
           before_comments: vec!["paren1".to_string()],
           rule: Rule::Paren(
-            Some("paren1".to_string()),
+            None,
             "[".to_string(),
             Box::new(RuleWithComment {
               before_comments: vec!["list1".to_string()],
               rule: Rule::List(
-                Some("list1".to_string()),
+                None,
                 ",".to_string(),
                 vec![
                   RuleWithComment {
@@ -330,31 +330,27 @@ fn check_listedrule_to_rule_1() {
                   },
                   RuleWithComment {
                     before_comments: vec![],
-                    rule: Rule::AST(Box::new(RuleWithComment {
-                      before_comments: vec![],
-                      rule: Rule::List(
-                        Some("list2".to_string()),
-                        ";".to_string(),
-                        vec![
-                          RuleWithComment {
-                            before_comments: vec![],
-                            rule: Rule::Unconfirmed("tag2".to_string()),
-                            after_comment: None,
-                          },
-                          RuleWithComment {
-                            before_comments: vec![],
-                            rule: Rule::Raw("s".to_string()),
-                            after_comment: None,
-                          },
-                          RuleWithComment {
-                            before_comments: vec![],
-                            rule: Rule::Unconfirmed("tag3".to_string()),
-                            after_comment: None,
-                          },
-                        ],
-                      ),
-                      after_comment: None,
-                    })),
+                    rule: Rule::List(
+                      None,
+                      ";".to_string(),
+                      vec![
+                        RuleWithComment {
+                          before_comments: vec![],
+                          rule: Rule::Unconfirmed("tag2".to_string()),
+                          after_comment: None,
+                        },
+                        RuleWithComment {
+                          before_comments: vec![],
+                          rule: Rule::Raw("s".to_string()),
+                          after_comment: None,
+                        },
+                        RuleWithComment {
+                          before_comments: vec![],
+                          rule: Rule::Unconfirmed("tag3".to_string()),
+                          after_comment: None,
+                        },
+                      ],
+                    ),
                     after_comment: None,
                   },
                   RuleWithComment {
