@@ -600,4 +600,250 @@ fn check_listedrule_to_rule_2() {
 }
 
 #[test]
-fn check_confirmed() {}
+fn check_confirmed_1() {
+  let rule = Rule::Column(
+    Some("column1".to_string()),
+    vec![
+      (
+        RuleWithComment {
+          before_comments: vec!["comment1".to_string()],
+          rule: Rule::Raw("let".to_string()),
+          after_comment: Some("comment1".to_string()),
+        },
+        ColumnConfig::default(),
+      ),
+      (
+        RuleWithComment {
+          before_comments: vec!["paren1".to_string()],
+          rule: Rule::Paren(
+            Some("paren1".to_string()),
+            "[".to_string(),
+            Box::new(RuleWithComment {
+              before_comments: vec!["list1".to_string()],
+              rule: Rule::List(
+                Some("list1".to_string()),
+                ",".to_string(),
+                vec![
+                  RuleWithComment {
+                    before_comments: vec![],
+                    rule: Rule::Raw("abc".to_string()),
+                    after_comment: None,
+                  },
+                  RuleWithComment {
+                    before_comments: vec![],
+                    rule: Rule::Unconfirmed("tag1".to_string()),
+                    after_comment: None,
+                  },
+                  RuleWithComment {
+                    before_comments: vec![],
+                    rule: Rule::AST(Box::new(RuleWithComment {
+                      before_comments: vec![],
+                      rule: Rule::List(
+                        Some("list2".to_string()),
+                        ";".to_string(),
+                        vec![
+                          RuleWithComment {
+                            before_comments: vec![],
+                            rule: Rule::Unconfirmed("tag2".to_string()),
+                            after_comment: None,
+                          },
+                          RuleWithComment {
+                            before_comments: vec![],
+                            rule: Rule::Raw("s".to_string()),
+                            after_comment: None,
+                          },
+                          RuleWithComment {
+                            before_comments: vec![],
+                            rule: Rule::Unconfirmed("tag3".to_string()),
+                            after_comment: None,
+                          },
+                        ],
+                      ),
+                      after_comment: None,
+                    })),
+                    after_comment: None,
+                  },
+                  RuleWithComment {
+                    before_comments: vec![],
+                    rule: Rule::Raw("123".to_string()),
+                    after_comment: None,
+                  },
+                ],
+              ),
+              after_comment: Some("list1".to_string()),
+            }),
+            "]".to_string(),
+          ),
+          after_comment: Some("paren1".to_string()),
+        },
+        ColumnConfig::default(),
+      ),
+    ],
+  );
+  let mut data = Data::new(&rule);
+  let list2_before = data.tag_data.get("list2");
+  let before = InternalRule {
+    rules: vec![
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Unconfirmed("tag2".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Raw("s".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Unconfirmed("tag3".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+    ],
+  };
+  assert_eq!(Some(&before), list2_before);
+  data.insert("tag2", &Rule::Raw("tag2".to_string()));
+  data.confirmed("tag2");
+  let list2_after = data.tag_data.get("list2");
+  let after = InternalRule {
+    rules: vec![
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Link("tag2".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Raw("s".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Unconfirmed("tag3".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+    ],
+  };
+  assert_eq!(Some(&after), list2_after);
+  let tag2 = data.get("tag2");
+  assert_eq!(
+    Some(RuleWithComment {
+      before_comments: vec![],
+      rule: Rule::Raw("tag2".to_string()),
+      after_comment: None
+    }),
+    tag2
+  );
+}
+
+#[test]
+fn check_confirmed_2() {
+  let rule = Rule::Column(
+    Some("column1".to_string()),
+    vec![
+      (
+        RuleWithComment {
+          before_comments: vec!["comment1".to_string()],
+          rule: Rule::Raw("let".to_string()),
+          after_comment: Some("comment1".to_string()),
+        },
+        ColumnConfig::default(),
+      ),
+      (
+        RuleWithComment {
+          before_comments: vec!["paren1".to_string()],
+          rule: Rule::Paren(
+            Some("paren1".to_string()),
+            "[".to_string(),
+            Box::new(RuleWithComment {
+              before_comments: vec!["list1".to_string()],
+              rule: Rule::List(
+                Some("list1".to_string()),
+                ",".to_string(),
+                vec![
+                  RuleWithComment {
+                    before_comments: vec![],
+                    rule: Rule::Raw("abc".to_string()),
+                    after_comment: None,
+                  },
+                  RuleWithComment {
+                    before_comments: vec![],
+                    rule: Rule::Unconfirmed("tag1".to_string()),
+                    after_comment: None,
+                  },
+                  RuleWithComment {
+                    before_comments: vec![],
+                    rule: Rule::AST(Box::new(RuleWithComment {
+                      before_comments: vec![],
+                      rule: Rule::List(
+                        Some("list2".to_string()),
+                        ";".to_string(),
+                        vec![
+                          RuleWithComment {
+                            before_comments: vec![],
+                            rule: Rule::Unconfirmed("tag2".to_string()),
+                            after_comment: None,
+                          },
+                          RuleWithComment {
+                            before_comments: vec![],
+                            rule: Rule::Raw("s".to_string()),
+                            after_comment: None,
+                          },
+                          RuleWithComment {
+                            before_comments: vec![],
+                            rule: Rule::Unconfirmed("tag3".to_string()),
+                            after_comment: None,
+                          },
+                        ],
+                      ),
+                      after_comment: None,
+                    })),
+                    after_comment: None,
+                  },
+                  RuleWithComment {
+                    before_comments: vec![],
+                    rule: Rule::Raw("123".to_string()),
+                    after_comment: None,
+                  },
+                ],
+              ),
+              after_comment: Some("list1".to_string()),
+            }),
+            "]".to_string(),
+          ),
+          after_comment: Some("paren1".to_string()),
+        },
+        ColumnConfig::default(),
+      ),
+    ],
+  );
+  let mut data = Data::new(&rule);
+  let list1_before = data.tag_data.get("list1");
+  let before = InternalRule {
+    rules: vec![
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Raw("abc".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Unconfirmed("tag1".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Open(OpenRule::List(Some("list2".to_string()), ";".to_string())),
+      ListedRule::Close(CloseRule::List),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Raw("123".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+    ],
+  };
+  assert_eq!(Some(&before), list1_before);
+  data.confirmed("list2");
+  let list1_after = data.tag_data.get("list1");
+  let after = InternalRule {
+    rules: vec![
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Raw("abc".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Unconfirmed("tag1".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Open(OpenRule::List(None, ";".to_string())),
+      ListedRule::Link("list2".to_string()),
+      ListedRule::Close(CloseRule::List),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Raw("123".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+    ],
+  };
+  assert_eq!(Some(&after), list1_after);
+}

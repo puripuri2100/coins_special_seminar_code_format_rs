@@ -423,7 +423,7 @@ impl Data {
   /// 2. 今作業しているデータのタグの名前
   /// 3. 値を確定させたい対象のタグの名前
   /// となっている
-  pub fn confirmed_with_tag(
+  fn confirmed_with_tag(
     &mut self,
     internal_rule: &InternalRule,
     target_tag_name: &str,
@@ -437,15 +437,22 @@ impl Data {
       } else {
         match listed_rule {
           // 目的のタグが発見できたので、更新して終了
+          // もし目的のタグのリンク先が存在しないと値の確定はできないので、エラー
           ListedRule::Unconfirmed(unconfirmed_tag_name)
             if unconfirmed_tag_name == target_tag_name =>
           {
+            if self.tag_data.get(target_tag_name).is_none() {
+              panic!()
+            }
             new_rules.push(ListedRule::Link(target_tag_name.to_string()));
             is_confirmed = true;
           }
           ListedRule::Open(OpenRule::Paren(Some(open_tag_name), open_str, comments))
             if open_tag_name == target_tag_name =>
           {
+            if self.tag_data.get(target_tag_name).is_none() {
+              panic!()
+            }
             new_rules.push(ListedRule::Open(OpenRule::Paren(
               None,
               open_str.clone(),
@@ -457,6 +464,9 @@ impl Data {
           ListedRule::Open(OpenRule::List(Some(open_tag_name), join))
             if open_tag_name == target_tag_name =>
           {
+            if self.tag_data.get(target_tag_name).is_none() {
+              panic!()
+            }
             new_rules.push(ListedRule::Open(OpenRule::List(None, join.clone())));
             new_rules.push(ListedRule::Link(open_tag_name.clone()));
             is_confirmed = true;
@@ -464,13 +474,18 @@ impl Data {
           ListedRule::Open(OpenRule::Column(Some(open_tag_name)))
             if open_tag_name == target_tag_name =>
           {
+            if self.tag_data.get(target_tag_name).is_none() {
+              panic!()
+            }
             new_rules.push(ListedRule::Open(OpenRule::Column(None)));
             new_rules.push(ListedRule::Link(open_tag_name.clone()));
             is_confirmed = true;
           }
           // 目標とするタグ名ではなかったため、リンク先のルールを見に行き、
           // そこに目標があったら終了
-          ListedRule::Unconfirmed(unconfirmed_tag_name) => {
+          ListedRule::Unconfirmed(unconfirmed_tag_name)
+            if self.tag_data.get(unconfirmed_tag_name).is_some() =>
+          {
             if let Some(unconfirmed_internal_rules) = self.tag_data.get(unconfirmed_tag_name) {
               let new_internal_rule_opt =
                 self.confirmed_with_tag(&unconfirmed_internal_rules.clone(), target_tag_name);
@@ -483,7 +498,7 @@ impl Data {
               }
             }
           }
-          ListedRule::Link(linked_tag_name) => {
+          ListedRule::Link(linked_tag_name) if self.tag_data.get(linked_tag_name).is_some() => {
             if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
               let new_internal_rule_opt =
                 self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
@@ -496,7 +511,9 @@ impl Data {
               }
             }
           }
-          ListedRule::Open(OpenRule::Paren(Some(linked_tag_name), open_str, comments)) => {
+          ListedRule::Open(OpenRule::Paren(Some(linked_tag_name), open_str, comments))
+            if self.tag_data.get(linked_tag_name).is_some() =>
+          {
             if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
               let new_internal_rule_opt =
                 self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
@@ -513,7 +530,9 @@ impl Data {
               }
             }
           }
-          ListedRule::Open(OpenRule::List(Some(linked_tag_name), join)) => {
+          ListedRule::Open(OpenRule::List(Some(linked_tag_name), join))
+            if self.tag_data.get(linked_tag_name).is_some() =>
+          {
             if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
               let new_internal_rule_opt =
                 self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
@@ -529,7 +548,9 @@ impl Data {
               }
             }
           }
-          ListedRule::Open(OpenRule::Column(Some(linked_tag_name))) => {
+          ListedRule::Open(OpenRule::Column(Some(linked_tag_name)))
+            if self.tag_data.get(linked_tag_name).is_some() =>
+          {
             if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
               let new_internal_rule_opt =
                 self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
