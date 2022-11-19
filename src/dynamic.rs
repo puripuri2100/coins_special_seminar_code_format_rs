@@ -7,7 +7,7 @@ pub type Tag = String;
 pub type BeforeComments = Vec<String>;
 pub type AfterComment = Option<String>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ListedRule {
   Unconfirmed(Tag),
   Link(String),
@@ -16,7 +16,7 @@ pub enum ListedRule {
   Close(CloseRule),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpenRule {
   Paren(Option<Tag>, String, BeforeComments),
   List(Option<Tag>, String),
@@ -25,7 +25,7 @@ pub enum OpenRule {
   Contents(BeforeComments),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CloseRule {
   Paren(String, AfterComment),
   List,
@@ -34,7 +34,7 @@ pub enum CloseRule {
   Contents(AfterComment),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Rule {
   Unconfirmed(Tag),
   AST(Box<RuleWithComment>),
@@ -52,7 +52,7 @@ pub enum Rule {
   Column(Option<Tag>, Vec<(RuleWithComment, ColumnConfig)>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuleWithComment {
   pub before_comments: Vec<String>,
   pub rule: Rule,
@@ -69,13 +69,14 @@ fn with_comment(r: &Rule) -> RuleWithComment {
 
 pub type FormattedRuleStack = Vec<OpenRule>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InternalRule {
   pub rules: Vec<ListedRule>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Data {
+  pub root: InternalRule,
   pub tag_data: HashMap<Tag, InternalRule>,
   pub stack: FormattedRuleStack,
 }
@@ -352,13 +353,14 @@ impl Data {
   /// 新規データを木構造から生成する
   /// "root"が予約されており、そこを起点に探索やプリントが行われる
   pub fn new(rule: &Rule) -> Self {
-    let mut tag_data = HashMap::new();
-    let (rules, new_data) = rule_to_listedrule(rule);
-    let internal_rule = InternalRule { rules };
-    merge_hash_map(&mut tag_data, &new_data);
-    tag_data.insert("root".to_string(), internal_rule);
+    let (rules, tag_data) = rule_to_listedrule(rule);
+    let root = InternalRule { rules };
     let stack = Vec::new();
-    Data { tag_data, stack }
+    Data {
+      root,
+      tag_data,
+      stack,
+    }
   }
 
   /// 値を挿入する
@@ -403,12 +405,17 @@ impl Data {
       None => None,
     }
   }
+
   /// 値を確定させる
   /// 内部の実装としては`Unconfirmed(Tag)`を`Link(Tag)`にし、`Some(Tag)`を`None`にする
   /// タグは重複しないことが保証されている
   /// 最初は"root"で検索を行うが、リンクが存在する場合はリンク先まで追っていく。
   pub fn confirmed(&mut self, tag: &str) {
-    let _ = self.confirmed_with_tag("root", tag);
+    let root = self.clone().root;
+    let new_internal_rule_opt = self.confirmed_with_tag(&root, tag);
+    if let Some(new_internal_rule) = new_internal_rule_opt {
+      self.root = new_internal_rule
+    }
   }
 
   /// 引数はそれぞれ
@@ -416,12 +423,16 @@ impl Data {
   /// 2. 今作業しているデータのタグの名前
   /// 3. 値を確定させたい対象のタグの名前
   /// となっている
-  pub fn confirmed_with_tag(&mut self, tag: &str, target_tag_name: &str) -> bool {
+  pub fn confirmed_with_tag(
+    &mut self,
+    internal_rule: &InternalRule,
+    target_tag_name: &str,
+  ) -> Option<InternalRule> {
     let mut new_rules = vec![];
     let mut is_confirmed = false;
-    let internal_rules = self.tag_data.get(tag).unwrap().clone().rules;
-    for listed_rule in internal_rules.iter() {
+    for listed_rule in internal_rule.rules.iter() {
       if is_confirmed {
+        // 更新が終了しているのでタグをそのまま横流しして追加するだけでよい
         new_rules.push(listed_rule.clone())
       } else {
         match listed_rule {
@@ -429,7 +440,7 @@ impl Data {
           ListedRule::Unconfirmed(unconfirmed_tag_name)
             if unconfirmed_tag_name == target_tag_name =>
           {
-            new_rules.push(ListedRule::Link(tag.to_string()));
+            new_rules.push(ListedRule::Link(target_tag_name.to_string()));
             is_confirmed = true;
           }
           ListedRule::Open(OpenRule::Paren(Some(open_tag_name), open_str, comments))
@@ -460,47 +471,77 @@ impl Data {
           // 目標とするタグ名ではなかったため、リンク先のルールを見に行き、
           // そこに目標があったら終了
           ListedRule::Unconfirmed(unconfirmed_tag_name) => {
-            let new_is_confirmed = self.confirmed_with_tag(unconfirmed_tag_name, target_tag_name);
-            new_rules.push(ListedRule::Unconfirmed(unconfirmed_tag_name.to_string()));
-            if new_is_confirmed {
-              is_confirmed = new_is_confirmed
+            if let Some(unconfirmed_internal_rules) = self.tag_data.get(unconfirmed_tag_name) {
+              let new_internal_rule_opt =
+                self.confirmed_with_tag(&unconfirmed_internal_rules.clone(), target_tag_name);
+              new_rules.push(ListedRule::Unconfirmed(unconfirmed_tag_name.to_string()));
+              if let Some(new_internal_rule) = new_internal_rule_opt {
+                self
+                  .tag_data
+                  .insert(unconfirmed_tag_name.clone(), new_internal_rule);
+                is_confirmed = true
+              }
             }
           }
           ListedRule::Link(linked_tag_name) => {
-            let new_is_confirmed = self.confirmed_with_tag(linked_tag_name, target_tag_name);
-            new_rules.push(ListedRule::Link(linked_tag_name.to_string()));
-            if new_is_confirmed {
-              is_confirmed = new_is_confirmed
+            if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
+              let new_internal_rule_opt =
+                self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
+              new_rules.push(ListedRule::Link(linked_tag_name.to_string()));
+              if let Some(new_internal_rule) = new_internal_rule_opt {
+                self
+                  .tag_data
+                  .insert(linked_tag_name.clone(), new_internal_rule);
+                is_confirmed = true
+              }
             }
           }
           ListedRule::Open(OpenRule::Paren(Some(linked_tag_name), open_str, comments)) => {
-            let new_is_confirmed = self.confirmed_with_tag(linked_tag_name, target_tag_name);
-            new_rules.push(ListedRule::Open(OpenRule::Paren(
-              Some(linked_tag_name.to_string()),
-              open_str.to_string(),
-              comments.clone(),
-            )));
-            if new_is_confirmed {
-              is_confirmed = new_is_confirmed
+            if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
+              let new_internal_rule_opt =
+                self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
+              new_rules.push(ListedRule::Open(OpenRule::Paren(
+                Some(linked_tag_name.to_string()),
+                open_str.to_string(),
+                comments.clone(),
+              )));
+              if let Some(new_internal_rule) = new_internal_rule_opt {
+                self
+                  .tag_data
+                  .insert(linked_tag_name.clone(), new_internal_rule);
+                is_confirmed = true
+              }
             }
           }
           ListedRule::Open(OpenRule::List(Some(linked_tag_name), join)) => {
-            let new_is_confirmed = self.confirmed_with_tag(linked_tag_name, target_tag_name);
-            new_rules.push(ListedRule::Open(OpenRule::List(
-              Some(linked_tag_name.to_string()),
-              join.to_string(),
-            )));
-            if new_is_confirmed {
-              is_confirmed = new_is_confirmed
+            if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
+              let new_internal_rule_opt =
+                self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
+              new_rules.push(ListedRule::Open(OpenRule::List(
+                Some(linked_tag_name.to_string()),
+                join.to_string(),
+              )));
+              if let Some(new_internal_rule) = new_internal_rule_opt {
+                self
+                  .tag_data
+                  .insert(linked_tag_name.clone(), new_internal_rule);
+                is_confirmed = true
+              }
             }
           }
           ListedRule::Open(OpenRule::Column(Some(linked_tag_name))) => {
-            let new_is_confirmed = self.confirmed_with_tag(linked_tag_name, target_tag_name);
-            new_rules.push(ListedRule::Open(OpenRule::Column(Some(
-              linked_tag_name.to_string(),
-            ))));
-            if new_is_confirmed {
-              is_confirmed = new_is_confirmed
+            if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
+              let new_internal_rule_opt =
+                self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
+              new_rules.push(ListedRule::Open(OpenRule::Column(Some(
+                linked_tag_name.to_string(),
+              ))));
+              if let Some(new_internal_rule) = new_internal_rule_opt {
+                self
+                  .tag_data
+                  .insert(linked_tag_name.clone(), new_internal_rule);
+                is_confirmed = true
+              }
             }
           }
           // 以上以外の何も無い普通の要素はそのまま追加
@@ -509,9 +550,12 @@ impl Data {
       }
     }
     // 目標が見つかっても見つからなくてもデータは更新しておく
-    let new_internal_rule = InternalRule { rules: new_rules };
-    self.tag_data.insert(tag.to_string(), new_internal_rule);
-    is_confirmed
+    if is_confirmed {
+      let new_internal_rule = InternalRule { rules: new_rules };
+      Some(new_internal_rule)
+    } else {
+      None
+    }
   }
 
   /// コードフォーマット

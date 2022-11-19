@@ -17,7 +17,7 @@ pub struct RuleWithComment {
   pub after_comment: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ColumnConfig {
   pub is_break: Option<bool>,
   /// トークン間に入れるスペースの数

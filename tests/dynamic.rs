@@ -598,3 +598,6 @@ fn check_listedrule_to_rule_2() {
     generate_rule
   )
 }
+
+#[test]
+fn check_confirmed() {}
