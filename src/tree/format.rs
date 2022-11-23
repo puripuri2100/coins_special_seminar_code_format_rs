@@ -225,21 +225,31 @@ fn break_token_column(
   let mut buf2 = String::new();
   let mut buf2_after_spaces = 1;
   let mut lst = lst.iter().peekable();
+  let mut is_last_exists_after_comment_global = false;
   loop {
     if let Some((rule_with_comment, config)) = lst.next() {
       let (mut str_lst, is_last_exists_after_comment) =
         code_format(&ctx.set_list_join_str(None), rule_with_comment);
-      if str_lst.len() > 1 || is_last_exists_after_comment {
+      is_last_exists_after_comment_global = is_last_exists_after_comment;
+      if str_lst.len() > 1 {
         // 複数行
         if !buf1.is_empty() {
           let new_code_str = format!("{buf1}{}{buf2}", " ".repeat(buf1_after_spaces));
           v.push(new_code_str);
         }
         v.append(&mut str_lst);
-        buf1 = String::new();
-        buf1_after_spaces = 1;
-        buf2 = String::new();
-        buf2_after_spaces = 1;
+        if is_last_exists_after_comment {
+          buf1 = String::new();
+          buf1_after_spaces = 1;
+          buf2 = String::new();
+          buf2_after_spaces = 1;
+        } else {
+          let last_code = v.pop().unwrap();
+          buf1 = last_code;
+          buf1_after_spaces = config.space_size.unwrap_or(1);
+          buf2 = String::new();
+          buf2_after_spaces = 1;
+        }
       } else {
         // 一行
         let buf1_len = buf1.len();
@@ -366,6 +376,17 @@ fn break_token_column(
     }
   }
   if let Some(after_comment) = after_comment_opt {
+    if !is_last_exists_after_comment_global {
+      let last_code_opt = v.pop();
+      if let Some(last_code) = last_code_opt {
+        // 最後にコードを追加する
+        let code = format!(
+          "{last_code} {}",
+          (ctx.oneline_comment_format)(after_comment.to_string())
+        );
+        v.push(code);
+      }
+    };
     v.push((ctx.oneline_comment_format)(after_comment.to_string()));
     (v, true)
   } else {

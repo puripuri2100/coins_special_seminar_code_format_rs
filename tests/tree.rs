@@ -341,3 +341,39 @@ fuga
   );
   assert_eq!(ok_str, code_format(&make_ctx(), &test.to_rule()))
 }
+
+#[test]
+fn check9() {
+  let rule = RuleWithComment {
+    before_comments: vec![],
+    rule: Rule::Column(vec![
+      (
+        RuleWithComment {
+          before_comments: vec!["comment".to_string()],
+          rule: Rule::Raw("a".to_string()),
+          after_comment: None,
+        },
+        ColumnConfig::default(),
+      ),
+      (
+        RuleWithComment {
+          before_comments: vec![],
+          rule: Rule::Raw("b".to_string()),
+          after_comment: None,
+        },
+        ColumnConfig::default(),
+      ),
+      (
+        RuleWithComment {
+          before_comments: vec![],
+          rule: Rule::Raw("c".to_string()),
+          after_comment: Some("last".to_string()),
+        },
+        ColumnConfig::default(),
+      ),
+    ]),
+    after_comment: Some("last2".to_string()),
+  };
+  let code = code_format(&make_ctx(), &rule);
+  assert_eq!("// comment\na b c // last\n// last2".to_string(), code)
+}
