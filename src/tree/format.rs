@@ -221,9 +221,9 @@ fn break_token_column(
     v.append(&mut code_vec)
   }
   let mut buf1 = String::new();
-  let mut buf1_after_spaces = 1;
+  let mut buf1_after_spaces = 0;
   let mut buf2 = String::new();
-  let mut buf2_after_spaces = 1;
+  let mut buf2_after_spaces = 0;
   let mut lst = lst.iter().peekable();
   let mut is_last_exists_after_comment_global = false;
   loop {
@@ -240,15 +240,15 @@ fn break_token_column(
         v.append(&mut str_lst);
         if is_last_exists_after_comment {
           buf1 = String::new();
-          buf1_after_spaces = 1;
+          buf1_after_spaces = 0;
           buf2 = String::new();
-          buf2_after_spaces = 1;
+          buf2_after_spaces = 0;
         } else {
           let last_code = v.pop().unwrap();
           buf1 = last_code;
           buf1_after_spaces = config.space_size.unwrap_or(1);
           buf2 = String::new();
-          buf2_after_spaces = 1;
+          buf2_after_spaces = 0;
         }
       } else {
         // 一行
@@ -276,9 +276,9 @@ fn break_token_column(
               };
               v.push(new_code_str);
               buf1 = String::new();
-              buf1_after_spaces = 1;
+              buf1_after_spaces = 0;
               buf2 = String::new();
-              buf2_after_spaces = 1;
+              buf2_after_spaces = 0;
             }
             Some(false) => {
               // 改行不可ポイント
@@ -303,7 +303,7 @@ fn break_token_column(
               buf1.push_str(&code_str);
               buf1_after_spaces = config.space_size.unwrap_or(1);
               buf2 = String::new();
-              buf2_after_spaces = 1;
+              buf2_after_spaces = 0;
             }
           }
         } else {
@@ -319,7 +319,7 @@ fn break_token_column(
             buf1 = code_str;
             buf1_after_spaces = config.space_size.unwrap_or(1);
             buf2 = String::new();
-            buf2_after_spaces = 1;
+            buf2_after_spaces = 0;
           } else {
             // 直前が改行不可ポイントである
             if buf2_len + buf2_after_spaces + code_str_len <= ctx.len_max() {
@@ -330,9 +330,9 @@ fn break_token_column(
               let new_line_code_str = format!("{buf2}{}{code_str}", " ".repeat(buf2_after_spaces));
               v.push(new_line_code_str);
               buf1 = String::new();
-              buf1_after_spaces = 1;
+              buf1_after_spaces = 0;
               buf2 = String::new();
-              buf2_after_spaces = 1;
+              buf2_after_spaces = 0;
             } else {
               // buf2とcode_strをくっつけると行数オーバーする
               // はみ出す量がより少ない方を取る
@@ -347,7 +347,7 @@ fn break_token_column(
                 buf1 = code_str;
                 buf1_after_spaces = config.space_size.unwrap_or(1);
                 buf2 = String::new();
-                buf2_after_spaces = 1;
+                buf2_after_spaces = 0;
               } else {
                 // buf2とcode_strをくっつけた方がはみ出しが少ない
                 if !buf1.is_empty() {
@@ -357,9 +357,9 @@ fn break_token_column(
                   format!("{buf2}{}{code_str}", " ".repeat(buf2_after_spaces));
                 v.push(new_line_code_str);
                 buf1 = String::new();
-                buf1_after_spaces = 1;
+                buf1_after_spaces = 0;
                 buf2 = String::new();
-                buf2_after_spaces = 1;
+                buf2_after_spaces = 0;
               }
             }
           }
