@@ -2,6 +2,7 @@ mod format;
 
 use crate::{ColumnConfig, Context};
 
+/// 
 #[derive(Clone, Debug)]
 pub enum Rule {
   AST(Box<RuleWithComment>),
@@ -11,6 +12,7 @@ pub enum Rule {
   Column(Vec<(RuleWithComment, ColumnConfig)>),
 }
 
+/// コメントはそのトークンの出現する前の
 #[derive(Clone, Debug)]
 pub struct RuleWithComment {
   pub before_comments: Vec<String>,
