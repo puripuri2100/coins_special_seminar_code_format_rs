@@ -2,6 +2,8 @@ use crate::{ColumnConfig, Context};
 use core::panic;
 use std::{collections::HashMap, hash::Hash};
 
+mod format;
+
 pub type Tag = String;
 
 pub type BeforeComments = Vec<String>;
@@ -10,7 +12,6 @@ pub type AfterComment = Option<String>;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ListedRule {
   Unconfirmed(Tag),
-  Link(String),
   Raw(String),
   Open(OpenRule),
   Close(CloseRule),
@@ -67,7 +68,19 @@ fn with_comment(r: &Rule) -> RuleWithComment {
   }
 }
 
+/// フォーマットのルールをstackで保持する
+/// - Openした際にインデントを深くしたか
+/// - 一行なのか複数行なのか
+/// といった情報を取り扱う
 pub type FormattedRuleStack = Vec<OpenRule>;
+
+/// 出力保留中の情報
+/// 考えられるパターンを全て列挙しておき、それをキューで保存する
+/// 先頭から出力可能条件に合致したら出力していく
+/// - 複数行になるかわからないParenの開き文字
+/// - 複数行になるかわからないListの要素
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct OnHoldInfo {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InternalRule {
@@ -79,6 +92,14 @@ pub struct Data {
   pub root: InternalRule,
   pub tag_data: HashMap<Tag, InternalRule>,
   pub stack: FormattedRuleStack,
+  /// 現在処理中のtag
+  /// Noneだとrootを表す
+  pub process_tag: Option<Tag>,
+  /// 出力保留中の情報
+  /// 例えば
+  /// - 複数行になるかわからないParenの開き文字
+  /// - 複数行になるかわからないListの要素
+  pub on_hold_info: OnHoldInfo,
 }
 
 fn merge_hash_map<K, V>(base: &mut HashMap<K, V>, add: &HashMap<K, V>) -> HashMap<K, V>
@@ -201,13 +222,6 @@ pub fn flat_listedrule(
   let mut v = vec![];
   for listed_rule in listed_rules.iter() {
     match listed_rule {
-      ListedRule::Link(tag) => {
-        let internal_rule_opt = tag_data.get(tag);
-        if let Some(internal_rule) = internal_rule_opt {
-          let mut children = flat_listedrule(&internal_rule.rules, tag_data);
-          v.append(&mut children)
-        }
-      }
       ListedRule::Open(OpenRule::List(Some(tag), join)) => {
         v.push(ListedRule::Open(OpenRule::List(None, join.to_string())));
         let internal_rule_opt = tag_data.get(tag);
@@ -360,6 +374,8 @@ impl Data {
       root,
       tag_data,
       stack,
+      process_tag: None,
+      on_hold_info: OnHoldInfo::default(),
     }
   }
 
@@ -408,6 +424,7 @@ impl Data {
 
   /// 値を確定させる
   /// 内部の実装としては`Unconfirmed(Tag)`を`Link(Tag)`にし、`Some(Tag)`を`None`にする
+  /// `Some(Tag)`を`None`にする際にはタグ先のデータを全てリストに移してtagの開放を行う
   /// タグは重複しないことが保証されている
   /// 最初は"root"で検索を行うが、リンクが存在する場合はリンク先まで追っていく。
   pub fn confirmed(&mut self, tag: &str) {
@@ -441,11 +458,14 @@ impl Data {
           ListedRule::Unconfirmed(unconfirmed_tag_name)
             if unconfirmed_tag_name == target_tag_name =>
           {
-            if self.tag_data.get(target_tag_name).is_none() {
+            if let Some(data) = self.tag_data.get(target_tag_name) {
+              let tag_rules = &data.rules;
+              new_rules.append(&mut tag_rules.clone());
+              self.tag_data.remove(target_tag_name);
+              is_confirmed = true;
+            } else {
               panic!()
             }
-            new_rules.push(ListedRule::Link(target_tag_name.to_string()));
-            is_confirmed = true;
           }
           ListedRule::Open(OpenRule::Paren(Some(open_tag_name), open_str, comments))
             if open_tag_name == target_tag_name =>
@@ -458,7 +478,13 @@ impl Data {
               open_str.clone(),
               comments.clone(),
             )));
-            new_rules.push(ListedRule::Link(open_tag_name.clone()));
+            let tag_rules = &self
+              .tag_data
+              .get(open_tag_name)
+              .expect("存在していなければならない")
+              .rules;
+            new_rules.append(&mut tag_rules.clone());
+            self.tag_data.remove(open_tag_name);
             is_confirmed = true;
           }
           ListedRule::Open(OpenRule::List(Some(open_tag_name), join))
@@ -468,7 +494,13 @@ impl Data {
               panic!()
             }
             new_rules.push(ListedRule::Open(OpenRule::List(None, join.clone())));
-            new_rules.push(ListedRule::Link(open_tag_name.clone()));
+            let tag_rules = &self
+              .tag_data
+              .get(open_tag_name)
+              .expect("存在していなければならない")
+              .rules;
+            new_rules.append(&mut tag_rules.clone());
+            self.tag_data.remove(open_tag_name);
             is_confirmed = true;
           }
           ListedRule::Open(OpenRule::Column(Some(open_tag_name)))
@@ -478,7 +510,13 @@ impl Data {
               panic!()
             }
             new_rules.push(ListedRule::Open(OpenRule::Column(None)));
-            new_rules.push(ListedRule::Link(open_tag_name.clone()));
+            let tag_rules = &self
+              .tag_data
+              .get(open_tag_name)
+              .expect("存在していなければならない")
+              .rules;
+            new_rules.append(&mut tag_rules.clone());
+            self.tag_data.remove(open_tag_name);
             is_confirmed = true;
           }
           // 目標とするタグ名ではなかったため、リンク先のルールを見に行き、
@@ -494,19 +532,6 @@ impl Data {
                 self
                   .tag_data
                   .insert(unconfirmed_tag_name.clone(), new_internal_rule);
-                is_confirmed = true
-              }
-            }
-          }
-          ListedRule::Link(linked_tag_name) if self.tag_data.get(linked_tag_name).is_some() => {
-            if let Some(linked_internal_rules) = self.tag_data.get(linked_tag_name) {
-              let new_internal_rule_opt =
-                self.confirmed_with_tag(&linked_internal_rules.clone(), target_tag_name);
-              new_rules.push(ListedRule::Link(linked_tag_name.to_string()));
-              if let Some(new_internal_rule) = new_internal_rule_opt {
-                self
-                  .tag_data
-                  .insert(linked_tag_name.clone(), new_internal_rule);
                 is_confirmed = true
               }
             }
@@ -580,11 +605,7 @@ impl Data {
   }
 
   /// コードフォーマット
-  pub fn format(&mut self, ctx: Context) -> Vec<String> {
-    let mut code_lst = vec![];
-    let root = self.tag_data.get("root").unwrap();
-    let root_rules = root.clone().rules;
-    for root_rule in root_rules.iter() {}
-    code_lst
+  pub fn format(&mut self, ctx: &Context) -> String {
+    format::code_format(ctx, self).join(&ctx.break_str)
   }
 }

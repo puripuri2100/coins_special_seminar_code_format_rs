@@ -702,7 +702,7 @@ fn check_confirmed_1() {
   let after = InternalRule {
     rules: vec![
       ListedRule::Open(OpenRule::Contents(vec![])),
-      ListedRule::Link("tag2".to_string()),
+      ListedRule::Raw("tag2".to_string()),
       ListedRule::Close(CloseRule::Contents(None)),
       ListedRule::Open(OpenRule::Contents(vec![])),
       ListedRule::Raw("s".to_string()),
@@ -714,14 +714,7 @@ fn check_confirmed_1() {
   };
   assert_eq!(Some(&after), list2_after);
   let tag2 = data.get("tag2");
-  assert_eq!(
-    Some(RuleWithComment {
-      before_comments: vec![],
-      rule: Rule::Raw("tag2".to_string()),
-      after_comment: None
-    }),
-    tag2
-  );
+  assert_eq!(None, tag2);
 }
 
 #[test]
@@ -837,7 +830,15 @@ fn check_confirmed_2() {
       ListedRule::Close(CloseRule::Contents(None)),
       ListedRule::Open(OpenRule::Contents(vec![])),
       ListedRule::Open(OpenRule::List(None, ";".to_string())),
-      ListedRule::Link("list2".to_string()),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Unconfirmed("tag2".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Raw("s".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
+      ListedRule::Open(OpenRule::Contents(vec![])),
+      ListedRule::Unconfirmed("tag3".to_string()),
+      ListedRule::Close(CloseRule::Contents(None)),
       ListedRule::Close(CloseRule::List),
       ListedRule::Close(CloseRule::Contents(None)),
       ListedRule::Open(OpenRule::Contents(vec![])),
